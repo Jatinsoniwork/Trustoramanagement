@@ -85,13 +85,10 @@ export function ConnectAccountModal({
           <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 p-3.5 border border-amber-300 dark:border-amber-700/60 space-y-1.5 text-xs text-amber-900 dark:text-amber-200">
             <div className="flex items-center gap-2 font-semibold">
               <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span>Google OAuth Credentials Missing</span>
+              <span>Google OAuth Notice</span>
             </div>
             <p className="text-[11px] text-amber-800/90 dark:text-amber-300/90 leading-relaxed">
-              To connect your real Google Account, add your <code className="font-mono font-semibold bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded">GOOGLE_CLIENT_ID</code> and <code className="font-mono font-semibold bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded">GOOGLE_CLIENT_SECRET</code> to your <code className="font-mono font-semibold bg-amber-100 dark:bg-amber-900/60 px-1 py-0.5 rounded">.env</code> file.
-            </p>
-            <p className="text-[11px] text-amber-700 dark:text-amber-400">
-              Check <code className="font-mono underline">docs/google-oauth-setup.md</code> for the full 2-minute setup guide.
+              Ensure your Google Cloud Console authorized redirect URI is configured. You can click below to continue to the Google authorization consent page.
             </p>
           </div>
         )}
@@ -113,11 +110,11 @@ export function ConnectAccountModal({
             size="sm"
             onClick={handleStartOAuth}
             isLoading={isRedirecting}
-            disabled={!isConfigured || isRedirecting}
+            disabled={isRedirecting}
             className="gap-1.5 shadow-sm"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>{isConfigured ? "Continue to Google" : "Setup .env First"}</span>
+            <span>Continue to Google</span>
           </Button>
         </div>
       </div>
