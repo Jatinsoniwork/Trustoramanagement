@@ -50,6 +50,21 @@ export const DEMO_CLIENTS: Client[] = [
 
 export const DEMO_BUSINESSES: Business[] = [
   {
+    id: "biz-manohar-chai",
+    clientId: "demo-client-1",
+    name: "Manohar Chai",
+    googleMapsUrl: "https://www.google.com/search?q=manohar+chai+ranjhi",
+    googleReviewUrl: "https://www.google.com/search?q=manohar+chai+ranjhi&oq=manohar+chai+ranjhi+#sv=CCYSxwEKEgoDdGJzEgtscmY6ITNzSUFFPQoYCgFxEhNtYW5vaGFyIGNoYWkgcmFuamhpCgcKA3VkbRIAEAEaEHB2LS9nLzExeXN6ZHk5YzYqKgoNL2cvMTF5c3pkeTljNiIZChNtYW5vaGFyIGNoYWkgcmFuamhpEAIYAzJOChNtYW5vaGFyIGNoYWkgcmFuamhpSObKuubjvYCACFohEAAQARACGAAYARgCIhNtYW5vaGFyIGNoYWkgcmFuamhpkgEJdGVhX3N0b3JlGAogkeDDkgU",
+    placeIdentifier: "manohar-chai-ranjhi",
+    category: "Tea Store & Cafe",
+    location: "Ranjhi, Jabalpur",
+    notes: "Specializes in high quality chai and best staff services.",
+    status: "ACTIVE",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    _count: { reviewRequests: 1 },
+  },
+  {
     id: "demo-biz-1",
     clientId: "demo-client-1",
     name: "Artisan Cafe & Roastery (Demo)",
@@ -126,6 +141,45 @@ export const DEMO_GOOGLE_ACCOUNTS: GoogleAccount[] = [
 ];
 
 export const DEMO_REVIEW_REQUESTS: ReviewRequest[] = [
+  {
+    id: "req-manohar-chai",
+    businessId: "biz-manohar-chai",
+    googleAccountId: "demo-gacc-1",
+    customerName: "Satisfied Customer",
+    customerEmail: null,
+    serviceName: "Tea & Service",
+    requestToken: "tok-manohar-chai",
+    channel: "SMS",
+    experience: "chai is very good staff services are best",
+    rating: 5,
+    language: "en",
+    tone: "authentic",
+    keywords: "chai, staff service, best quality",
+    requestedLength: "standard",
+    status: "GENERATED",
+    sentAt: new Date(),
+    openedAt: new Date(),
+    feedbackSubmittedAt: new Date(),
+    copiedAt: null,
+    googleHandoffAt: null,
+    expiresAt: new Date(Date.now() + 86400000 * 30),
+    reminderCount: 0,
+    regenerationCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    drafts: [
+      {
+        id: "draft-mc-1",
+        reviewRequestId: "req-manohar-chai",
+        content:
+          "Visited Manohar Chai in Ranjhi and had a fantastic experience! The chai is exceptionally good—rich, hot, and flavorful. The staff services are easily the best in town, very attentive and friendly. A must-visit place for tea lovers!",
+        version: 1,
+        isCurrent: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ],
+  },
   {
     id: "demo-req-1",
     businessId: "demo-biz-1",
