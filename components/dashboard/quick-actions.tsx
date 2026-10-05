@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { UserPlus, Building2, Share2, FilePlus2 } from "lucide-react";
+import { UserPlus, Building2, Share2, FilePlus2, Sparkles } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { ConnectAccountModal } from "@/components/google-accounts/connect-account-modal";
 
@@ -24,7 +24,7 @@ export function QuickActions({
           <CardTitle className="text-sm font-semibold">Quick Actions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
             {/* 1. Add Client */}
             <button
               type="button"
@@ -53,7 +53,20 @@ export function QuickActions({
               </span>
             </button>
 
-            {/* 3. Connect Google Account (Controlled Milestone Placeholder) */}
+            {/* 3. Open Review Flow */}
+            <Link
+              href="/review"
+              className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-lg border border-sky-200 dark:border-sky-900/60 bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-100/60 dark:hover:bg-sky-900/40 hover:border-sky-300 dark:hover:border-sky-700 transition-all cursor-pointer group text-center"
+            >
+              <div className="h-8 w-8 rounded-lg bg-sky-100 dark:bg-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-400 group-hover:scale-105 transition-transform">
+                <Sparkles className="h-4 w-4" />
+              </div>
+              <span className="text-xs font-medium text-sky-950 dark:text-sky-200 font-semibold">
+                Open Review Flow
+              </span>
+            </Link>
+
+            {/* 4. Connect Google Account */}
             <button
               type="button"
               onClick={() => setGoogleModalOpen(true)}
@@ -67,7 +80,7 @@ export function QuickActions({
               </span>
             </button>
 
-            {/* 4. New Review Request */}
+            {/* 5. New Review Request */}
             <Link
               href="/review-requests/new"
               className="flex flex-col items-center justify-center gap-2 p-3.5 rounded-lg border border-zinc-200/80 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/40 hover:bg-zinc-100/80 dark:hover:bg-zinc-800/60 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all cursor-pointer group text-center"

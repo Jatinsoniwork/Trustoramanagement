@@ -30,10 +30,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const navigation = [
     { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
     { name: "Admin Analytics", href: "/admin/dashboard", icon: BarChart3 },
-    { name: "Clients", href: "/clients", icon: Users },
+    { name: "Customer Review Flow", href: "/review", icon: Sparkles },
+    { name: "Review Requests", href: "/review-requests", icon: FileText },
     { name: "Businesses", href: "/businesses", icon: Building2 },
     { name: "Google Accounts", href: "/google-accounts", icon: Share2 },
-    { name: "Review Requests", href: "/review-requests", icon: FileText },
+    { name: "Clients", href: "/clients", icon: Users },
     { name: "Activity Logs", href: "/activity", icon: Activity },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
