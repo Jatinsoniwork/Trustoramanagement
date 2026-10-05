@@ -1,0 +1,226 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ------------------------------------------------------
+// 1. Admin & Operator Management
+// ------------------------------------------------------
+enum AdminRole {
+  ADMIN
+  OPERATOR
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  role         AdminRole     @default(OPERATOR)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  activityLogs ActivityLog[]
+
+  @@map("admin_users")
+}
+
+// ------------------------------------------------------
+// 2. Client Management
+// ------------------------------------------------------
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Client {
+  id          String        @id @default(cuid())
+  name        String
+  contactName String
+  email       String
+  phone       String
+  notes       String?       @db.Text
+  status      ClientStatus  @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  businesses  Business[]
+
+  @@index([status])
+  @@index([name])
+  @@map("clients")
+}
+
+// ------------------------------------------------------
+// 3. Business Management
+// ------------------------------------------------------
+enum BusinessStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model Business {
+  id              String          @id @default(cuid())
+  clientId        String
+  name            String
+  googleMapsUrl   String
+  googleReviewUrl String?
+  placeIdentifier String?
+  category        String
+  location        String
+  notes           String?         @db.Text
+  status          BusinessStatus  @default(ACTIVE)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  reviewRequests  ReviewRequest[]
+
+  @@index([clientId])
+  @@index([status])
+  @@map("businesses")
+}
+
+// ------------------------------------------------------
+// 4. Authorized Google Accounts (Milestone 2 OAuth Foundation)
+// ------------------------------------------------------
+enum GoogleAccountStatus {
+  CONNECTED
+  REAUTH_REQUIRED
+  DISCONNECTED
+  ERROR
+  CONNECTING
+  REVOKED
+  EXPIRED
+}
+
+model GoogleAccount {
+  id                    String              @id @default(cuid())
+  email                 String              @unique
+  displayName           String
+  googleUserId          String?             @unique
+  profileImageUrl       String?
+  // Tokens are encrypted at rest with AES-256-GCM. Never logged or exposed to the client.
+  accessTokenEncrypted  String?             @db.Text
+  refreshTokenEncrypted String?             @db.Text
+  tokenExpiresAt        DateTime?
+  scopes                String?             @db.Text
+  status                GoogleAccountStatus @default(DISCONNECTED)
+  lastConnectedAt       DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  reviewRequests        ReviewRequest[]
+
+  @@index([status])
+  @@index([email])
+  @@map("google_accounts")
+}
+
+// ------------------------------------------------------
+// 5. Review Requests
+// ------------------------------------------------------
+enum ReviewRequestStatus {
+  DRAFT
+  GENERATING
+  GENERATED
+  EDITED
+  APPROVED
+  READY_TO_SUBMIT
+  REDIRECTED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ReviewRequest {
+  id              String              @id @default(cuid())
+  businessId      String
+  googleAccountId String?
+  // Operator-provided customer's genuine experience. NEVER fabricate.
+  experience      String              @db.Text
+  rating          Int                 @default(5)
+  language        String              @default("en")
+  tone            String?             @default("authentic")
+  keywords        String?             @db.Text
+  requestedLength String?             @default("standard")
+  status          ReviewRequestStatus @default(DRAFT)
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  googleAccount   GoogleAccount?      @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  drafts          ReviewDraft[]
+
+  @@index([businessId])
+  @@index([googleAccountId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("review_requests")
+}
+
+// ------------------------------------------------------
+// 6. Review Drafts (Multi-version history)
+// ------------------------------------------------------
+model ReviewDraft {
+  id              String        @id @default(cuid())
+  reviewRequestId String
+  content         String        @db.Text
+  version         Int           @default(1)
+  isCurrent       Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  reviewRequest   ReviewRequest @relation(fields: [reviewRequestId], references: [id], onDelete: Cascade)
+
+  @@index([reviewRequestId])
+  @@index([isCurrent])
+  @@map("review_drafts")
+}
+
+// ------------------------------------------------------
+// 7. Activity & Audit Logs
+// ------------------------------------------------------
+enum ActivityAction {
+  CLIENT_CREATED
+  CLIENT_UPDATED
+  CLIENT_DEACTIVATED
+  BUSINESS_CREATED
+  BUSINESS_UPDATED
+  BUSINESS_DEACTIVATED
+  GOOGLE_ACCOUNT_CONNECTED
+  GOOGLE_ACCOUNT_RECONNECTED
+  GOOGLE_ACCOUNT_DISCONNECTED
+  GOOGLE_ACCOUNT_REAUTH_REQUIRED
+  GOOGLE_ACCOUNT_REFRESH_FAILED
+  REVIEW_REQUEST_CREATED
+  REVIEW_REQUEST_UPDATED
+  REVIEW_GENERATED
+  REVIEW_EDITED
+  REVIEW_APPROVED
+  REVIEW_COPIED
+  REVIEW_REDIRECTED_TO_GOOGLE
+  REVIEW_COMPLETED
+  SYSTEM_SETTING_UPDATED
+}
+
+model ActivityLog {
+  id         String         @id @default(cuid())
+  actorId    String?
+  action     ActivityAction
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime       @default(now())
+
+  actor      AdminUser?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
