@@ -1,30 +1,19 @@
 import { prisma, isDatabaseConfigured } from "@/lib/db/prisma";
-import { DEMO_CLIENTS } from "@/lib/data/mockData";
 import { Client, ClientStatus } from "@/types";
 import { ClientInput } from "@/lib/validation/client.schema";
 
 export const clientRepository = {
   async findAll(query?: { search?: string; status?: ClientStatus }): Promise<Client[]> {
     if (!isDatabaseConfigured()) {
-      let filtered = [...DEMO_CLIENTS];
-      if (query?.status) {
-        filtered = filtered.filter((c) => c.status === query.status);
-      }
-      if (query?.search) {
-        const q = query.search.toLowerCase();
-        filtered = filtered.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            c.contactName.toLowerCase().includes(q) ||
-            c.email.toLowerCase().includes(q)
-        );
-      }
-      return filtered;
+      return [];
     }
     try {
       const where: {
         status?: "ACTIVE" | "INACTIVE";
-        OR?: Array<{ name?: { contains: string; mode: "insensitive" } } | { contactName?: { contains: string; mode: "insensitive" } }>;
+        OR?: Array<
+          | { name?: { contains: string; mode: "insensitive" } }
+          | { contactName?: { contains: string; mode: "insensitive" } }
+        >;
       } = {};
 
       if (query?.status) {
@@ -50,29 +39,15 @@ export const clientRepository = {
       });
 
       return clients as unknown as Client[];
-    } catch {
-      // Graceful fallback to development demo data
-      let filtered = [...DEMO_CLIENTS];
-      if (query?.status) {
-        filtered = filtered.filter((c) => c.status === query.status);
-      }
-      if (query?.search) {
-        const q = query.search.toLowerCase();
-        filtered = filtered.filter(
-          (c) =>
-            c.name.toLowerCase().includes(q) ||
-            c.contactName.toLowerCase().includes(q) ||
-            c.email.toLowerCase().includes(q)
-        );
-      }
-      return filtered;
+    } catch (error) {
+      console.error("Error finding clients from database:", error);
+      return [];
     }
   },
 
   async findById(id: string): Promise<Client | null> {
     if (!isDatabaseConfigured()) {
-      const found = DEMO_CLIENTS.find((c) => c.id === id);
-      return found || null;
+      return null;
     }
     try {
       const client = await prisma.client.findUnique({
@@ -87,42 +62,25 @@ export const clientRepository = {
           },
         },
       });
-      return client as unknown as Client | null;
-    } catch {
-      const found = DEMO_CLIENTS.find((c) => c.id === id);
-      return found || null;
+      return (client as unknown as Client) || null;
+    } catch (error) {
+      console.error(`Error finding client by id ${id}:`, error);
+      return null;
     }
   },
 
   async create(data: ClientInput): Promise<Client> {
-    try {
-      const created = await prisma.client.create({
-        data: {
-          name: data.name,
-          contactName: data.contactName,
-          email: data.email,
-          phone: data.phone,
-          notes: data.notes ?? null,
-          status: data.status,
-        },
-      });
-      return created as unknown as Client;
-    } catch {
-      const fallback: Client = {
-        id: `client-${Date.now()}`,
+    const created = await prisma.client.create({
+      data: {
         name: data.name,
         contactName: data.contactName,
         email: data.email,
         phone: data.phone,
-        notes: data.notes,
+        notes: data.notes ?? null,
         status: data.status,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        _count: { businesses: 0 },
-      };
-      DEMO_CLIENTS.unshift(fallback);
-      return fallback;
-    }
+      },
+    });
+    return created as unknown as Client;
   },
 
   async update(id: string, data: Partial<ClientInput>): Promise<Client | null> {
@@ -134,17 +92,9 @@ export const clientRepository = {
           notes: data.notes === undefined ? undefined : data.notes,
         },
       });
-      return updated as unknown as Client;
-    } catch {
-      const idx = DEMO_CLIENTS.findIndex((c) => c.id === id);
-      if (idx !== -1) {
-        DEMO_CLIENTS[idx] = {
-          ...DEMO_CLIENTS[idx],
-          ...data,
-          updatedAt: new Date(),
-        };
-        return DEMO_CLIENTS[idx];
-      }
+      return (updated as unknown as Client) || null;
+    } catch (error) {
+      console.error(`Error updating client ${id}:`, error);
       return null;
     }
   },
@@ -156,12 +106,8 @@ export const clientRepository = {
         data: { status: "INACTIVE" },
       });
       return true;
-    } catch {
-      const client = DEMO_CLIENTS.find((c) => c.id === id);
-      if (client) {
-        client.status = "INACTIVE";
-        return true;
-      }
+    } catch (error) {
+      console.error(`Error deactivating client ${id}:`, error);
       return false;
     }
   },

@@ -1,5 +1,4 @@
 import { prisma, isDatabaseConfigured } from "@/lib/db/prisma";
-import { DEMO_GOOGLE_ACCOUNTS } from "@/lib/data/mockData";
 import { GoogleAccount, GoogleAccountStatus } from "@/types";
 
 export interface UpsertGoogleAccountData {
@@ -20,16 +19,7 @@ export const googleAccountRepository = {
    */
   async findAll(query?: { status?: GoogleAccountStatus }): Promise<GoogleAccount[]> {
     if (!isDatabaseConfigured()) {
-      const uniqueMap = new Map<string, GoogleAccount>();
-      for (const a of DEMO_GOOGLE_ACCOUNTS) {
-        const key = a.email.toLowerCase();
-        if (!uniqueMap.has(key)) uniqueMap.set(key, a);
-      }
-      let filtered = Array.from(uniqueMap.values());
-      if (query?.status) {
-        filtered = filtered.filter((a) => a.status === query.status);
-      }
-      return filtered;
+      return [];
     }
     try {
       const accounts = await prisma.googleAccount.findMany({
@@ -51,17 +41,9 @@ export const googleAccountRepository = {
         orderBy: { createdAt: "desc" },
       });
       return accounts as unknown as GoogleAccount[];
-    } catch {
-      const uniqueMap = new Map<string, GoogleAccount>();
-      for (const a of DEMO_GOOGLE_ACCOUNTS) {
-        const key = a.email.toLowerCase();
-        if (!uniqueMap.has(key)) uniqueMap.set(key, a);
-      }
-      let filtered = Array.from(uniqueMap.values());
-      if (query?.status) {
-        filtered = filtered.filter((a) => a.status === query.status);
-      }
-      return filtered;
+    } catch (error) {
+      console.error("Error finding Google accounts from database:", error);
+      return [];
     }
   },
 
@@ -70,8 +52,7 @@ export const googleAccountRepository = {
    */
   async findById(id: string): Promise<GoogleAccount | null> {
     if (!isDatabaseConfigured()) {
-      const found = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      return found || null;
+      return null;
     }
     try {
       const account = await prisma.googleAccount.findUnique({
@@ -90,10 +71,10 @@ export const googleAccountRepository = {
           updatedAt: true,
         },
       });
-      return account as unknown as GoogleAccount | null;
-    } catch {
-      const found = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      return found || null;
+      return (account as unknown as GoogleAccount) || null;
+    } catch (error) {
+      console.error(`Error finding Google account ${id}:`, error);
+      return null;
     }
   },
 
@@ -102,8 +83,7 @@ export const googleAccountRepository = {
    */
   async findByGoogleUserId(googleUserId: string): Promise<GoogleAccount | null> {
     if (!isDatabaseConfigured()) {
-      const found = DEMO_GOOGLE_ACCOUNTS.find((a) => a.googleUserId === googleUserId);
-      return found || null;
+      return null;
     }
     try {
       const account = await prisma.googleAccount.findUnique({
@@ -122,10 +102,10 @@ export const googleAccountRepository = {
           updatedAt: true,
         },
       });
-      return account as unknown as GoogleAccount | null;
-    } catch {
-      const found = DEMO_GOOGLE_ACCOUNTS.find((a) => a.googleUserId === googleUserId);
-      return found || null;
+      return (account as unknown as GoogleAccount) || null;
+    } catch (error) {
+      console.error(`Error finding Google account by googleUserId:`, error);
+      return null;
     }
   },
 
@@ -136,46 +116,7 @@ export const googleAccountRepository = {
   async upsertAuthorizedAccount(data: UpsertGoogleAccountData): Promise<GoogleAccount> {
     const now = new Date();
 
-    if (!isDatabaseConfigured()) {
-      // In-memory demo fallback for test environments
-      const existingIdx = DEMO_GOOGLE_ACCOUNTS.findIndex(
-        (a) => a.googleUserId === data.googleUserId || a.email.toLowerCase() === data.email.toLowerCase()
-      );
-
-      if (existingIdx !== -1) {
-        DEMO_GOOGLE_ACCOUNTS[existingIdx] = {
-          ...DEMO_GOOGLE_ACCOUNTS[existingIdx],
-          email: data.email,
-          displayName: data.displayName,
-          profileImageUrl: data.profileImageUrl ?? DEMO_GOOGLE_ACCOUNTS[existingIdx].profileImageUrl,
-          scopes: data.scopes,
-          status: "CONNECTED",
-          tokenExpiresAt: data.tokenExpiresAt,
-          lastConnectedAt: now,
-          updatedAt: now,
-        };
-        return DEMO_GOOGLE_ACCOUNTS[existingIdx];
-      }
-
-      const newAccount: GoogleAccount = {
-        id: `gacc-${Date.now()}`,
-        email: data.email,
-        displayName: data.displayName,
-        googleUserId: data.googleUserId,
-        profileImageUrl: data.profileImageUrl,
-        scopes: data.scopes,
-        status: "CONNECTED",
-        tokenExpiresAt: data.tokenExpiresAt,
-        lastConnectedAt: now,
-        createdAt: now,
-        updatedAt: now,
-      };
-      DEMO_GOOGLE_ACCOUNTS.unshift(newAccount);
-      return newAccount;
-    }
-
     try {
-      // Look up existing by googleUserId or email
       const existing = await prisma.googleAccount.findFirst({
         where: {
           OR: [{ googleUserId: data.googleUserId }, { email: data.email }],
@@ -243,53 +184,9 @@ export const googleAccountRepository = {
         },
       });
       return created as unknown as GoogleAccount;
-    } catch {
-      // In case of database exception, fallback safely with duplicate prevention
-      const existingIdx = DEMO_GOOGLE_ACCOUNTS.findIndex(
-        (a) =>
-          (data.googleUserId && a.googleUserId === data.googleUserId) ||
-          a.email.toLowerCase() === data.email.toLowerCase()
-      );
-
-      if (existingIdx !== -1) {
-        DEMO_GOOGLE_ACCOUNTS[existingIdx] = {
-          ...DEMO_GOOGLE_ACCOUNTS[existingIdx],
-          email: data.email,
-          displayName: data.displayName,
-          profileImageUrl:
-            data.profileImageUrl ?? DEMO_GOOGLE_ACCOUNTS[existingIdx].profileImageUrl,
-          scopes: data.scopes,
-          status: "CONNECTED",
-          tokenExpiresAt: data.tokenExpiresAt,
-          lastConnectedAt: now,
-          updatedAt: now,
-        };
-        const updated = DEMO_GOOGLE_ACCOUNTS[existingIdx];
-        // Clean up any duplicate records with same email
-        const unique = DEMO_GOOGLE_ACCOUNTS.filter(
-          (a, idx) =>
-            idx === existingIdx || a.email.toLowerCase() !== data.email.toLowerCase()
-        );
-        DEMO_GOOGLE_ACCOUNTS.length = 0;
-        DEMO_GOOGLE_ACCOUNTS.push(...unique);
-        return updated;
-      }
-
-      const fallbackAccount: GoogleAccount = {
-        id: `gacc-${Date.now()}`,
-        email: data.email,
-        displayName: data.displayName,
-        googleUserId: data.googleUserId,
-        profileImageUrl: data.profileImageUrl,
-        scopes: data.scopes,
-        status: "CONNECTED",
-        tokenExpiresAt: data.tokenExpiresAt,
-        lastConnectedAt: now,
-        createdAt: now,
-        updatedAt: now,
-      };
-      DEMO_GOOGLE_ACCOUNTS.unshift(fallbackAccount);
-      return fallbackAccount;
+    } catch (error) {
+      console.error("Error upserting Google account in database:", error);
+      throw error;
     }
   },
 
@@ -357,9 +254,7 @@ export const googleAccountRepository = {
    */
   async updateStatus(id: string, status: GoogleAccountStatus): Promise<boolean> {
     if (!isDatabaseConfigured()) {
-      const acc = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      if (acc) acc.status = status;
-      return true;
+      return false;
     }
     try {
       await prisma.googleAccount.update({
@@ -368,9 +263,7 @@ export const googleAccountRepository = {
       });
       return true;
     } catch {
-      const acc = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      if (acc) acc.status = status;
-      return true;
+      return false;
     }
   },
 
@@ -379,9 +272,7 @@ export const googleAccountRepository = {
    */
   async disconnect(id: string): Promise<boolean> {
     if (!isDatabaseConfigured()) {
-      const acc = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      if (acc) acc.status = "DISCONNECTED";
-      return true;
+      return false;
     }
     try {
       await prisma.googleAccount.update({
@@ -395,9 +286,7 @@ export const googleAccountRepository = {
       });
       return true;
     } catch {
-      const acc = DEMO_GOOGLE_ACCOUNTS.find((a) => a.id === id);
-      if (acc) acc.status = "DISCONNECTED";
-      return true;
+      return false;
     }
   },
 };

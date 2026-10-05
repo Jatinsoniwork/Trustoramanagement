@@ -105,8 +105,9 @@ function BusinessFormContent({
       />
 
       <Input
-        label="Google Maps Business URL"
-        placeholder="https://maps.google.com/?cid=..."
+        label="Google Maps / Business URL"
+        helperText="Paste your Google Maps or Google Business profile URL. Customers will be directed here to submit their review manually."
+        placeholder="https://maps.google.com/... or https://g.page/..."
         value={formData.googleMapsUrl}
         onChange={(e) =>
           setFormData({ ...formData, googleMapsUrl: e.target.value })
@@ -117,6 +118,7 @@ function BusinessFormContent({
 
       <Input
         label="Direct Google Review URL (Optional)"
+        helperText="Direct review link if available (e.g. https://g.page/r/.../review). If omitted, the Google Maps / Business URL above will be used."
         placeholder="https://g.page/r/.../review or https://search.google.com/local/writereview?placeid=..."
         value={formData.googleReviewUrl || ""}
         onChange={(e) =>

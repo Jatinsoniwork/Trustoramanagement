@@ -1,7 +1,5 @@
-import crypto from "crypto";
 import { prisma, isDatabaseAvailable, markDatabaseFailure, markDatabaseSuccess } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
-import { DEMO_REVIEW_REQUESTS, DEMO_BUSINESSES } from "@/lib/data/mockData";
 import {
   ReviewRequest,
   ReviewRequestStatus,
@@ -26,23 +24,7 @@ export const reviewRepository = {
     language?: string;
   }): Promise<ReviewRequest[]> {
     if (!isDatabaseAvailable()) {
-      let filtered = [...DEMO_REVIEW_REQUESTS];
-      if (query?.businessId) {
-        filtered = filtered.filter((r) => r.businessId === query.businessId);
-      }
-      if (query?.status) {
-        filtered = filtered.filter((r) => r.status === query.status);
-      }
-      if (query?.rating) {
-        filtered = filtered.filter((r) => r.rating === query.rating);
-      }
-      if (query?.language) {
-        filtered = filtered.filter((r) => r.language === query.language);
-      }
-      return filtered.map((r) => ({
-        ...r,
-        business: r.business || DEMO_BUSINESSES.find((b) => b.id === r.businessId),
-      }));
+      return [];
     }
     try {
       const where: {
@@ -85,37 +67,15 @@ export const reviewRepository = {
 
       markDatabaseSuccess();
       return requests as unknown as ReviewRequest[];
-    } catch {
+    } catch (error) {
       markDatabaseFailure();
-      let filtered = [...DEMO_REVIEW_REQUESTS];
-      if (query?.businessId) {
-        filtered = filtered.filter((r) => r.businessId === query.businessId);
-      }
-      if (query?.status) {
-        filtered = filtered.filter((r) => r.status === query.status);
-      }
-      if (query?.rating) {
-        filtered = filtered.filter((r) => r.rating === query.rating);
-      }
-      if (query?.language) {
-        filtered = filtered.filter((r) => r.language === query.language);
-      }
-      return filtered.map((r) => ({
-        ...r,
-        business: r.business || DEMO_BUSINESSES.find((b) => b.id === r.businessId),
-      }));
+      console.error("Error finding review requests from database:", error);
+      return [];
     }
   },
 
   async findById(id: string): Promise<ReviewRequest | null> {
     if (!isDatabaseAvailable()) {
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === id);
-      if (found) {
-        return {
-          ...found,
-          business: found.business || DEMO_BUSINESSES.find((b) => b.id === found.businessId),
-        };
-      }
       return null;
     }
     try {
@@ -145,191 +105,217 @@ export const reviewRepository = {
       });
 
       markDatabaseSuccess();
-      return request as unknown as ReviewRequest | null;
-    } catch {
+      return (request as unknown as ReviewRequest) || null;
+    } catch (error) {
       markDatabaseFailure();
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === id);
-      if (found) {
-        return {
-          ...found,
-          business: found.business || DEMO_BUSINESSES.find((b) => b.id === found.businessId),
-        };
-      }
+      console.error(`Error finding review request by id ${id}:`, error);
       return null;
     }
   },
 
   async findByToken(token: string): Promise<ReviewRequest | null> {
-    const found = DEMO_REVIEW_REQUESTS.find((r) => r.requestToken === token);
-    if (found) {
-      return {
-        ...found,
-        business: found.business || DEMO_BUSINESSES.find((b) => b.id === found.businessId),
-      };
+    if (!isDatabaseAvailable() || !token) {
+      return null;
     }
-    return null;
+    try {
+      const request = await prisma.reviewRequest.findUnique({
+        where: { requestToken: token },
+        include: {
+          business: {
+            include: {
+              client: true,
+            },
+          },
+          googleAccount: {
+            select: {
+              id: true,
+              email: true,
+              displayName: true,
+              profileImageUrl: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+          drafts: {
+            orderBy: { version: "desc" },
+          },
+        },
+      });
+
+      markDatabaseSuccess();
+      return (request as unknown as ReviewRequest) || null;
+    } catch (error) {
+      markDatabaseFailure();
+      console.error(`Error finding review request by token:`, error);
+      return null;
+    }
   },
 
   async recordOpened(token: string): Promise<ReviewRequest | null> {
-    const found = DEMO_REVIEW_REQUESTS.find((r) => r.requestToken === token);
-    if (found) {
-      if (!found.openedAt) {
-        found.openedAt = new Date();
+    if (!isDatabaseAvailable() || !token) {
+      return null;
+    }
+    try {
+      const existing = await prisma.reviewRequest.findUnique({
+        where: { requestToken: token },
+      });
+      if (!existing) return null;
+
+      const now = new Date();
+      const statusUpdates: Prisma.ReviewRequestUpdateInput = {};
+      if (!existing.openedAt) {
+        statusUpdates.openedAt = now;
       }
       if (
-        found.status === "SENT" ||
-        found.status === "CREATED" ||
-        found.status === "SCHEDULED" ||
-        found.status === "DRAFT"
+        existing.status === "SENT" ||
+        existing.status === "CREATED" ||
+        existing.status === "SCHEDULED" ||
+        existing.status === "DRAFT"
       ) {
-        found.status = "OPENED";
+        statusUpdates.status = "OPENED";
       }
-      return {
-        ...found,
-        business: found.business || DEMO_BUSINESSES.find((b) => b.id === found.businessId),
-      };
+
+      const updated = await prisma.reviewRequest.update({
+        where: { requestToken: token },
+        data: statusUpdates,
+        include: {
+          business: {
+            include: { client: true },
+          },
+          drafts: {
+            orderBy: { version: "desc" },
+          },
+        },
+      });
+      markDatabaseSuccess();
+      return updated as unknown as ReviewRequest;
+    } catch (error) {
+      markDatabaseFailure();
+      console.error(`Error recording opened token:`, error);
+      return null;
     }
-    return null;
   },
 
   async recordOptOut(token: string): Promise<boolean> {
-    const found = DEMO_REVIEW_REQUESTS.find((r) => r.requestToken === token);
-    if (found) {
-      found.optedOut = true;
-      found.updatedAt = new Date();
-      return true;
+    if (!isDatabaseAvailable() || !token) {
+      return false;
     }
-    return false;
+    try {
+      await prisma.reviewRequest.update({
+        where: { requestToken: token },
+        data: { optedOut: true },
+      });
+      markDatabaseSuccess();
+      return true;
+    } catch (error) {
+      markDatabaseFailure();
+      console.error(`Error recording opt-out:`, error);
+      return false;
+    }
   },
 
   async updateRequest(
     id: string,
     updates: Partial<ReviewRequest>
   ): Promise<ReviewRequest | null> {
-    const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === id);
-    if (found) {
-      Object.assign(found, updates);
-      found.updatedAt = new Date();
-      return {
-        ...found,
-        business: found.business || DEMO_BUSINESSES.find((b) => b.id === found.businessId),
-      };
-    }
-    return null;
-  },
-
-  async create(data: ReviewRequestInput | (Partial<ReviewRequest> & { businessId: string })): Promise<ReviewRequest> {
-    if (!isDatabaseAvailable()) {
-      const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-      const fallback: ReviewRequest = {
-        id: `req-${uniqueSuffix}`,
-        businessId: data.businessId,
-        googleAccountId: data.googleAccountId,
-        customerName: (data as Partial<ReviewRequest>).customerName ?? null,
-        customerEmail: (data as Partial<ReviewRequest>).customerEmail ?? null,
-        customerPhone: (data as Partial<ReviewRequest>).customerPhone ?? null,
-        serviceId: (data as Partial<ReviewRequest>).serviceId ?? null,
-        serviceName: (data as Partial<ReviewRequest>).serviceName ?? null,
-        requestToken: (data as Partial<ReviewRequest>).requestToken ?? null,
-        channel: (data as Partial<ReviewRequest>).channel ?? "EMAIL",
-        experience: data.experience || "",
-        rating: data.rating ?? 5,
-        language: data.language ?? "en",
-        tone: data.tone ?? "authentic",
-        keywords: data.keywords ?? null,
-        requestedLength: data.requestedLength ?? "standard",
-        status: (data.status as ReviewRequestStatus) ?? "DRAFT",
-        scheduledAt: (data as Partial<ReviewRequest>).scheduledAt ?? null,
-        sentAt: (data as Partial<ReviewRequest>).sentAt ?? null,
-        openedAt: (data as Partial<ReviewRequest>).openedAt ?? null,
-        feedbackSubmittedAt: (data as Partial<ReviewRequest>).feedbackSubmittedAt ?? null,
-        expiresAt: (data as Partial<ReviewRequest>).expiresAt ?? null,
-        reminderCount: (data as Partial<ReviewRequest>).reminderCount ?? 0,
-        optedOut: (data as Partial<ReviewRequest>).optedOut ?? false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        drafts: [],
-      };
-      DEMO_REVIEW_REQUESTS.unshift(fallback);
-      return fallback;
+    if (!isDatabaseAvailable() || !id) {
+      return null;
     }
     try {
-      const created = await prisma.reviewRequest.create({
-        data: {
-          businessId: data.businessId,
-          googleAccountId: data.googleAccountId ?? null,
-          experience: data.experience || "",
-          rating: data.rating ?? 5,
-          language: data.language ?? "en",
-          tone: data.tone ?? null,
-          keywords: data.keywords ?? null,
-          requestedLength: data.requestedLength ?? null,
-          status: (data.status as unknown as Prisma.ReviewRequestCreateInput["status"]) ?? "DRAFT",
-        },
+      const data: Prisma.ReviewRequestUpdateInput = {
+        status: updates.status as unknown as Prisma.ReviewRequestUpdateInput["status"],
+        experience: updates.experience,
+        rating: updates.rating,
+        language: updates.language,
+        tone: updates.tone,
+        keywords: updates.keywords,
+        requestedLength: updates.requestedLength,
+        customerName: updates.customerName,
+        customerEmail: updates.customerEmail,
+        customerPhone: updates.customerPhone,
+        serviceName: updates.serviceName,
+        serviceId: updates.serviceId,
+        channel: updates.channel,
+        sentAt: updates.sentAt,
+        openedAt: updates.openedAt,
+        feedbackSubmittedAt: updates.feedbackSubmittedAt,
+        completedAt: updates.completedAt,
+        copiedAt: updates.copiedAt,
+        googleHandoffAt: updates.googleHandoffAt,
+        reminderCount: updates.reminderCount,
+        lastReminderAt: updates.lastReminderAt,
+        expiresAt: updates.expiresAt,
+        optedOut: updates.optedOut,
+      };
+
+      const updated = await prisma.reviewRequest.update({
+        where: { id },
+        data,
         include: {
           business: {
             include: { client: true },
           },
-          googleAccount: true,
-          drafts: true,
+          drafts: {
+            orderBy: { version: "desc" },
+          },
         },
       });
       markDatabaseSuccess();
-      return created as unknown as ReviewRequest;
-    } catch {
+      return updated as unknown as ReviewRequest;
+    } catch (error) {
       markDatabaseFailure();
-      const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-      const fallback: ReviewRequest = {
-        id: `req-${uniqueSuffix}`,
-        businessId: data.businessId,
-        googleAccountId: data.googleAccountId,
-        customerName: (data as Partial<ReviewRequest>).customerName ?? null,
-        customerEmail: (data as Partial<ReviewRequest>).customerEmail ?? null,
-        customerPhone: (data as Partial<ReviewRequest>).customerPhone ?? null,
-        serviceId: (data as Partial<ReviewRequest>).serviceId ?? null,
-        serviceName: (data as Partial<ReviewRequest>).serviceName ?? null,
-        requestToken: (data as Partial<ReviewRequest>).requestToken ?? null,
-        channel: (data as Partial<ReviewRequest>).channel ?? "EMAIL",
-        experience: data.experience || "",
-        rating: data.rating ?? 5,
-        language: data.language ?? "en",
-        tone: data.tone ?? "authentic",
-        keywords: data.keywords ?? null,
-        requestedLength: data.requestedLength ?? "standard",
-        status: (data.status as ReviewRequestStatus) ?? "DRAFT",
-        scheduledAt: (data as Partial<ReviewRequest>).scheduledAt ?? null,
-        sentAt: (data as Partial<ReviewRequest>).sentAt ?? null,
-        openedAt: (data as Partial<ReviewRequest>).openedAt ?? null,
-        feedbackSubmittedAt: (data as Partial<ReviewRequest>).feedbackSubmittedAt ?? null,
-        expiresAt: (data as Partial<ReviewRequest>).expiresAt ?? null,
-        reminderCount: (data as Partial<ReviewRequest>).reminderCount ?? 0,
-        optedOut: (data as Partial<ReviewRequest>).optedOut ?? false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        drafts: [],
-      };
-      DEMO_REVIEW_REQUESTS.unshift(fallback);
-      return fallback;
+      console.error(`Error updating review request ${id}:`, error);
+      return null;
     }
+  },
+
+  async create(data: ReviewRequestInput | (Partial<ReviewRequest> & { businessId: string })): Promise<ReviewRequest> {
+    const raw = data as Partial<ReviewRequest> & { businessId: string };
+    const created = await prisma.reviewRequest.create({
+      data: {
+        businessId: raw.businessId,
+        googleAccountId: raw.googleAccountId ?? null,
+        customerName: raw.customerName ?? null,
+        customerEmail: raw.customerEmail ?? null,
+        customerPhone: raw.customerPhone ?? null,
+        serviceId: raw.serviceId ?? null,
+        serviceName: raw.serviceName ?? null,
+        requestToken: raw.requestToken ?? null,
+        channel: raw.channel ?? "EMAIL",
+        experience: raw.experience || "",
+        rating: raw.rating ?? 5,
+        language: raw.language ?? "en",
+        tone: raw.tone ?? "authentic",
+        keywords: raw.keywords ?? null,
+        requestedLength: raw.requestedLength ?? "standard",
+        status: (raw.status as unknown as Prisma.ReviewRequestCreateInput["status"]) ?? "DRAFT",
+        scheduledAt: raw.scheduledAt ? new Date(raw.scheduledAt) : null,
+        sentAt: raw.sentAt ? new Date(raw.sentAt) : null,
+        openedAt: raw.openedAt ? new Date(raw.openedAt) : null,
+        feedbackSubmittedAt: raw.feedbackSubmittedAt ? new Date(raw.feedbackSubmittedAt) : null,
+        completedAt: raw.completedAt ? new Date(raw.completedAt) : null,
+        copiedAt: raw.copiedAt ? new Date(raw.copiedAt) : null,
+        googleHandoffAt: raw.googleHandoffAt ? new Date(raw.googleHandoffAt) : null,
+        expiresAt: raw.expiresAt ? new Date(raw.expiresAt) : null,
+        reminderCount: raw.reminderCount ?? 0,
+        optedOut: raw.optedOut ?? false,
+      },
+      include: {
+        business: {
+          include: { client: true },
+        },
+        googleAccount: true,
+        drafts: true,
+      },
+    });
+    markDatabaseSuccess();
+    return created as unknown as ReviewRequest;
   },
 
   async updateStatus(id: string, status: ReviewRequestStatus): Promise<boolean> {
     if (!id) return false;
     const now = new Date();
-    if (!isDatabaseAvailable()) {
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === id);
-      if (found) {
-        found.status = status;
-        if (status === "READY_TO_SUBMIT" && !found.copiedAt) {
-          found.copiedAt = now;
-        }
-        if (status === "REDIRECTED" && !found.googleHandoffAt) {
-          found.googleHandoffAt = now;
-        }
-        return true;
-      }
-      return false;
-    }
     try {
       await prisma.reviewRequest.update({
         where: { id },
@@ -341,19 +327,9 @@ export const reviewRepository = {
       });
       markDatabaseSuccess();
       return true;
-    } catch {
+    } catch (error) {
       markDatabaseFailure();
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === id);
-      if (found) {
-        found.status = status;
-        if (status === "READY_TO_SUBMIT" && !found.copiedAt) {
-          found.copiedAt = now;
-        }
-        if (status === "REDIRECTED" && !found.googleHandoffAt) {
-          found.googleHandoffAt = now;
-        }
-        return true;
-      }
+      console.error(`Error updating status for review request ${id}:`, error);
       return false;
     }
   },
@@ -367,27 +343,6 @@ export const reviewRepository = {
   },
 
   async addDraft(reviewRequestId: string, content: string): Promise<ReviewDraft> {
-    if (!isDatabaseAvailable()) {
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === reviewRequestId);
-      const version = (found?.drafts?.length || 0) + 1;
-      const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-      const newDraft: ReviewDraft = {
-        id: `draft-${uniqueSuffix}`,
-        reviewRequestId,
-        content,
-        version,
-        isCurrent: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      if (found) {
-        if (!found.drafts) found.drafts = [];
-        found.drafts.forEach((d) => (d.isCurrent = false));
-        found.drafts.unshift(newDraft);
-        found.status = "GENERATED";
-      }
-      return newDraft;
-    }
     try {
       await prisma.reviewDraft.updateMany({
         where: { reviewRequestId },
@@ -414,41 +369,14 @@ export const reviewRepository = {
 
       markDatabaseSuccess();
       return draft as unknown as ReviewDraft;
-    } catch {
+    } catch (error) {
       markDatabaseFailure();
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === reviewRequestId);
-      const version = (found?.drafts?.length || 0) + 1;
-      const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
-      const newDraft: ReviewDraft = {
-        id: `draft-${uniqueSuffix}`,
-        reviewRequestId,
-        content,
-        version,
-        isCurrent: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      if (found) {
-        if (!found.drafts) found.drafts = [];
-        found.drafts.forEach((d) => (d.isCurrent = false));
-        found.drafts.unshift(newDraft);
-        found.status = "GENERATED";
-      }
-      return newDraft;
+      console.error(`Error adding draft to review request ${reviewRequestId}:`, error);
+      throw error;
     }
   },
 
   async updateDraft(reviewRequestId: string, content: string): Promise<ReviewDraft> {
-    if (!isDatabaseAvailable()) {
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === reviewRequestId);
-      if (found && found.drafts && found.drafts.length > 0) {
-        const cur = found.drafts.find((d) => d.isCurrent) || found.drafts[0];
-        cur.content = content;
-        found.status = "EDITED";
-        return cur;
-      }
-      return this.addDraft(reviewRequestId, content);
-    }
     try {
       const current = await prisma.reviewDraft.findFirst({
         where: { reviewRequestId, isCurrent: true },
@@ -466,38 +394,25 @@ export const reviewRepository = {
         return updated as unknown as ReviewDraft;
       }
       return this.addDraft(reviewRequestId, content);
-    } catch {
+    } catch (error) {
       markDatabaseFailure();
-      const found = DEMO_REVIEW_REQUESTS.find((r) => r.id === reviewRequestId);
-      if (found && found.drafts && found.drafts.length > 0) {
-        const cur = found.drafts.find((d) => d.isCurrent) || found.drafts[0];
-        cur.content = content;
-        found.status = "EDITED";
-        return cur;
-      }
-      return this.addDraft(reviewRequestId, content);
+      console.error(`Error updating draft:`, error);
+      throw error;
     }
   },
 
-  /**
-   * Milestone 4: Paginated and filterable review management query.
-   * Enforces Multi-Business Data Isolation when businessId is supplied.
-   */
   async findPaginated(filters: AdminReviewFilters): Promise<PaginatedReviewsResponse> {
     const all = await this.findAll({
       businessId: filters.businessId,
       rating: filters.rating,
     });
 
-    // Apply date range filter
     let filtered = all.filter((r) => isWithinDateRange(r.createdAt, filters.dateRange));
 
-    // Apply status filter
     if (filters.status && filters.status !== "ALL") {
       filtered = filtered.filter((r) => matchesStatusFilter(r.status, filters.status));
     }
 
-    // Apply text search
     if (filters.search && filters.search.trim()) {
       filtered = filtered.filter((r) => matchesSearch(r, filters.search));
     }
@@ -518,11 +433,6 @@ export const reviewRepository = {
     };
   },
 
-  /**
-   * Milestone 4: Real database/store aggregated analytics.
-   * Strictly computes statistics from genuine records without fabrication.
-   * Scoped to businessId when supplied (Multi-Business Data Isolation).
-   */
   async getAnalytics(filters: { businessId?: string; dateRange?: string }): Promise<AdminAnalyticsData> {
     const all = await this.findAll({
       businessId: filters.businessId,
@@ -613,7 +523,6 @@ export const reviewRepository = {
       failedRequests,
     };
 
-    // Review Funnel with conversion and drop-off percentages
     const funnel: FunnelStep[] = [
       {
         step: "REQUESTED",
@@ -648,7 +557,7 @@ export const reviewRepository = {
         label: "Review Copied",
         count: copied,
         percentage: totalRequests > 0 ? Math.round((copied / totalRequests) * 100) : 0,
-        dropoffPercentage: generated > 0 ? Math.max(0, Math.round(((generated - copied) / generated) * 100)) : 0,
+        dropoffPercentage: edited > 0 ? Math.max(0, Math.round(((edited - copied) / edited) * 100)) : 0,
       },
       {
         step: "HANDOFF",
@@ -659,14 +568,12 @@ export const reviewRepository = {
       },
     ];
 
-    // Rating Distribution
     const ratingDistribution: RatingDistributionItem[] = [5, 4, 3, 2, 1].map((stars) => {
       const count = scoped.filter((r) => r.rating === stars).length;
       const percentage = validRatings.length > 0 ? Math.round((count / validRatings.length) * 100) : 0;
       return { stars, count, percentage };
     });
 
-    // Sentiment Overview
     const positiveCount = scoped.filter((r) => r.rating >= 4).length;
     const neutralCount = scoped.filter((r) => r.rating === 3).length;
     const negativeCount = scoped.filter((r) => r.rating <= 2).length;
@@ -681,7 +588,6 @@ export const reviewRepository = {
       negativePct: totalRated > 0 ? Math.round((negativeCount / totalRated) * 100) : 0,
     };
 
-    // Trends: Build 7 daily intervals
     const trends: TrendDataPoint[] = [];
     const daysToShow = filters.dateRange === "today" ? 1 : filters.dateRange === "yesterday" ? 2 : filters.dateRange === "7d" ? 7 : 14;
     const now = new Date();
@@ -719,10 +625,8 @@ export const reviewRepository = {
       });
     }
 
-    // Feedback Themes (Categorizes real customer feedback without inventing themes)
     const feedbackThemes = extractFeedbackThemes(scoped);
 
-    // Peak Activity Insight (Only when sufficient data exists, e.g. >= 5 records)
     let peakActivityText: string | null = null;
     if (scoped.length >= 5) {
       const hours = scoped.map((r) => new Date(r.createdAt).getHours());
@@ -740,7 +644,7 @@ export const reviewRepository = {
       });
       const startPeriod = maxHour >= 12 ? (maxHour === 12 ? "12 PM" : `${maxHour - 12} PM`) : (maxHour === 0 ? "12 AM" : `${maxHour} AM`);
       const endHour = (maxHour + 3) % 24;
-      const endPeriod = endHour >= 12 ? (endHour === 12 ? "12 PM" : `${endHour - 12} PM`) : (endHour === 0 ? "12 AM" : `${endHour} AM`);
+      const endPeriod = endHour >= 12 ? (endHour === 12 ? "12 PM" : `${endHour - 12} PM`) : (endHour === 0 ? "12 AM" : `${maxHour} AM`);
       const pct = Math.round((maxCount / scoped.length) * 100);
       peakActivityText = `Most review requests occur between ${startPeriod}–${endPeriod} (~${pct}% of activity).`;
     }
@@ -756,10 +660,6 @@ export const reviewRepository = {
     };
   },
 };
-
-// -------------------------------------------------------------------------
-// Helper Functions for Filtering & Analytics Calculations
-// -------------------------------------------------------------------------
 
 function isWithinDateRange(dateInput: Date | string, range?: string): boolean {
   if (!range || range === "all") return true;
@@ -808,6 +708,7 @@ function matchesSearch(r: ReviewRequest, search?: string): boolean {
   const q = search.toLowerCase().trim();
   if (r.experience && r.experience.toLowerCase().includes(q)) return true;
   if (r.business?.name && r.business.name.toLowerCase().includes(q)) return true;
+  if (r.customerName && r.customerName.toLowerCase().includes(q)) return true;
   if (r.drafts?.some((d) => d.content.toLowerCase().includes(q))) return true;
   return false;
 }
@@ -853,4 +754,3 @@ function extractFeedbackThemes(records: ReviewRequest[]): FeedbackThemeInsight[]
 
   return results.sort((a, b) => b.count - a.count);
 }
-

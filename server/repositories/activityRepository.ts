@@ -1,5 +1,4 @@
 import { prisma, isDatabaseAvailable, markDatabaseFailure, markDatabaseSuccess } from "@/lib/db/prisma";
-import { DEMO_ACTIVITY_LOGS } from "@/lib/data/mockData";
 import { ActivityLog, ActivityAction } from "@/types";
 import { redactSensitiveObject } from "@/lib/security/tokens";
 import { Prisma } from "@prisma/client";
@@ -12,19 +11,7 @@ export const activityRepository = {
     limit?: number;
   }): Promise<ActivityLog[]> {
     if (!isDatabaseAvailable()) {
-      let filtered = [...DEMO_ACTIVITY_LOGS];
-      if (query?.action) {
-        filtered = filtered.filter((l) => l.action === query.action);
-      }
-      if (query?.entityType) {
-        filtered = filtered.filter((l) => l.entityType === query.entityType);
-      }
-      if (query?.businessId) {
-        filtered = filtered.filter(
-          (l) => !l.metadata || (l.metadata as Record<string, unknown>).businessId === query.businessId
-        );
-      }
-      return filtered.slice(0, query?.limit ?? 50);
+      return [];
     }
     try {
       const where: {
@@ -45,22 +32,18 @@ export const activityRepository = {
       });
 
       markDatabaseSuccess();
-      return logs as unknown as ActivityLog[];
-    } catch {
-      markDatabaseFailure();
-      let filtered = [...DEMO_ACTIVITY_LOGS];
-      if (query?.action) {
-        filtered = filtered.filter((l) => l.action === query.action);
-      }
-      if (query?.entityType) {
-        filtered = filtered.filter((l) => l.entityType === query.entityType);
-      }
+
+      let result = logs as unknown as ActivityLog[];
       if (query?.businessId) {
-        filtered = filtered.filter(
+        result = result.filter(
           (l) => !l.metadata || (l.metadata as Record<string, unknown>).businessId === query.businessId
         );
       }
-      return filtered.slice(0, query?.limit ?? 50);
+      return result;
+    } catch (error) {
+      markDatabaseFailure();
+      console.error("Error finding activity logs from database:", error);
+      return [];
     }
   },
 
@@ -74,7 +57,7 @@ export const activityRepository = {
     const safeMetadata = data.metadata ? redactSensitiveObject(data.metadata) : null;
 
     if (!isDatabaseAvailable()) {
-      const fallback: ActivityLog = {
+      const emptyLog: ActivityLog = {
         id: `act-${Date.now()}`,
         actorId: data.actorId,
         action: data.action,
@@ -82,34 +65,45 @@ export const activityRepository = {
         entityId: data.entityId,
         metadata: safeMetadata,
         createdAt: new Date(),
-        actor: {
-          id: data.actorId || "operator-1",
-          name: "Primary Operator",
-          email: "operator@reviewflow.local",
-          role: "ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
       };
-      DEMO_ACTIVITY_LOGS.unshift(fallback);
-      return fallback;
+      return emptyLog;
     }
 
     try {
-      const created = await prisma.activityLog.create({
-        data: {
-          actorId: data.actorId ?? null,
-          action: data.action as unknown as Prisma.ActivityLogCreateInput["action"],
-          entityType: data.entityType,
-          entityId: data.entityId,
-          metadata: safeMetadata ? (safeMetadata as Prisma.InputJsonValue) : Prisma.JsonNull,
-        },
-        include: { actor: true },
-      });
+      let created;
+      try {
+        created = await prisma.activityLog.create({
+          data: {
+            actorId: data.actorId ?? null,
+            action: data.action as unknown as Prisma.ActivityLogCreateInput["action"],
+            entityType: data.entityType,
+            entityId: data.entityId,
+            metadata: safeMetadata ? (safeMetadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+          },
+          include: { actor: true },
+        });
+      } catch (fkError: unknown) {
+        const isFk = typeof fkError === "object" && fkError !== null && "code" in fkError && (fkError as { code: string }).code === "P2003";
+        if (isFk) {
+          created = await prisma.activityLog.create({
+            data: {
+              actorId: null,
+              action: data.action as unknown as Prisma.ActivityLogCreateInput["action"],
+              entityType: data.entityType,
+              entityId: data.entityId,
+              metadata: safeMetadata ? (safeMetadata as Prisma.InputJsonValue) : Prisma.JsonNull,
+            },
+            include: { actor: true },
+          });
+        } else {
+          throw fkError;
+        }
+      }
       markDatabaseSuccess();
       return created as unknown as ActivityLog;
-    } catch {
+    } catch (error) {
       markDatabaseFailure();
+      console.error("Error writing activity log to database:", error);
       const fallback: ActivityLog = {
         id: `act-${Date.now()}`,
         actorId: data.actorId,
@@ -118,16 +112,7 @@ export const activityRepository = {
         entityId: data.entityId,
         metadata: safeMetadata,
         createdAt: new Date(),
-        actor: {
-          id: data.actorId || "operator-1",
-          name: "Primary Operator",
-          email: "operator@reviewflow.local",
-          role: "ADMIN",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
       };
-      DEMO_ACTIVITY_LOGS.unshift(fallback);
       return fallback;
     }
   },

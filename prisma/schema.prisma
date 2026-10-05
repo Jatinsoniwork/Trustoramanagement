@@ -125,6 +125,12 @@ model GoogleAccount {
 // ------------------------------------------------------
 enum ReviewRequestStatus {
   DRAFT
+  CREATED
+  SCHEDULED
+  SENT
+  OPENED
+  FEEDBACK_STARTED
+  FEEDBACK_SUBMITTED
   GENERATING
   GENERATED
   EDITED
@@ -132,33 +138,54 @@ enum ReviewRequestStatus {
   READY_TO_SUBMIT
   REDIRECTED
   COMPLETED
+  EXPIRED
   FAILED
   CANCELLED
 }
 
 model ReviewRequest {
-  id              String              @id @default(cuid())
-  businessId      String
-  googleAccountId String?
+  id                  String              @id @default(cuid())
+  businessId          String
+  googleAccountId     String?
+  customerName        String?
+  customerEmail       String?
+  customerPhone       String?
+  serviceId           String?
+  serviceName         String?
+  requestToken        String?             @unique
+  channel             String?
   // Operator-provided customer's genuine experience. NEVER fabricate.
-  experience      String              @db.Text
-  rating          Int                 @default(5)
-  language        String              @default("en")
-  tone            String?             @default("authentic")
-  keywords        String?             @db.Text
-  requestedLength String?             @default("standard")
-  status          ReviewRequestStatus @default(DRAFT)
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  experience          String              @db.Text
+  rating              Int                 @default(5)
+  language            String              @default("en")
+  tone                String?             @default("authentic")
+  keywords            String?             @db.Text
+  requestedLength     String?             @default("standard")
+  status              ReviewRequestStatus @default(DRAFT)
+  scheduledAt         DateTime?
+  sentAt              DateTime?
+  openedAt            DateTime?
+  feedbackSubmittedAt DateTime?
+  completedAt         DateTime?
+  copiedAt            DateTime?
+  googleHandoffAt     DateTime?
+  reminderCount       Int                 @default(0)
+  lastReminderAt      DateTime?
+  expiresAt           DateTime?
+  optedOut            Boolean             @default(false)
+  regenerationCount   Int                 @default(0)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
 
-  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  googleAccount   GoogleAccount?      @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
-  drafts          ReviewDraft[]
+  business            Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  googleAccount       GoogleAccount?      @relation(fields: [googleAccountId], references: [id], onDelete: SetNull)
+  drafts              ReviewDraft[]
 
   @@index([businessId])
   @@index([googleAccountId])
   @@index([status])
   @@index([createdAt])
+  @@index([requestToken])
   @@map("review_requests")
 }
 
@@ -197,13 +224,26 @@ enum ActivityAction {
   GOOGLE_ACCOUNT_REAUTH_REQUIRED
   GOOGLE_ACCOUNT_REFRESH_FAILED
   REVIEW_REQUEST_CREATED
+  REVIEW_REQUEST_SCHEDULED
+  REVIEW_REQUEST_SENT
+  REVIEW_REQUEST_OPENED
   REVIEW_REQUEST_UPDATED
+  FEEDBACK_STARTED
+  FEEDBACK_SUBMITTED
   REVIEW_GENERATED
   REVIEW_EDITED
   REVIEW_APPROVED
   REVIEW_COPIED
   REVIEW_REDIRECTED_TO_GOOGLE
   REVIEW_COMPLETED
+  SERVICE_COMPLETED
+  REMINDER_SENT
+  REQUEST_COMPLETED
+  REQUEST_EXPIRED
+  REQUEST_CANCELLED
+  NOTIFICATION_FAILED
+  CUSTOMER_OPTED_OUT
+  AUTOMATION_SETTINGS_UPDATED
   SYSTEM_SETTING_UPDATED
 }
 

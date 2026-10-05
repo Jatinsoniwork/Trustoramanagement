@@ -22,7 +22,7 @@ export function BusinessTable({
   onAddBusiness,
   onEditBusiness,
 }: BusinessTableProps) {
-  const [businesses] = React.useState<Business[]>(initialBusinesses);
+  const businesses = initialBusinesses;
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [categoryFilter, setCategoryFilter] = React.useState<string>("ALL");

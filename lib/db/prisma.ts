@@ -13,18 +13,10 @@ export const isDatabaseConfigured = (): boolean => {
 const RETRY_INTERVAL_MS = 60000;
 
 export const isDatabaseAvailable = (): boolean => {
-  if (!isDatabaseConfigured()) return false;
-  if (globalForPrisma.dbAvailable === false) {
-    const elapsed = Date.now() - (globalForPrisma.lastDbFailure ?? 0);
-    if (elapsed < RETRY_INTERVAL_MS) {
-      return false;
-    }
-  }
-  return true;
+  return isDatabaseConfigured();
 };
 
 export const markDatabaseFailure = (): void => {
-  globalForPrisma.dbAvailable = false;
   globalForPrisma.lastDbFailure = Date.now();
 };
 

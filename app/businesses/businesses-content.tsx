@@ -36,31 +36,40 @@ export function BusinessesContent({
     const parentClient = clients.find((c) => c.id === data.clientId);
 
     if (businessToEdit) {
+      const res = await fetch(`/api/businesses/${businessToEdit.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update business");
+      }
+      const updated = await res.json();
       setBusinesses((prev) =>
         prev.map((b) =>
           b.id === businessToEdit.id
             ? {
                 ...b,
-                ...data,
+                ...updated.data,
                 client: parentClient || b.client,
-                updatedAt: new Date(),
               }
             : b
         )
       );
     } else {
+      const res = await fetch("/api/businesses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create business");
+      }
+      const created = await res.json();
       const newBiz: Business = {
-        id: `biz-${Date.now()}`,
-        clientId: data.clientId,
-        name: data.name,
-        googleMapsUrl: data.googleMapsUrl,
-        placeIdentifier: data.placeIdentifier,
-        category: data.category,
-        location: data.location,
-        notes: data.notes,
-        status: data.status,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        ...created.data,
         client: parentClient,
         _count: { reviewRequests: 0 },
       };

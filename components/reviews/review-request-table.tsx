@@ -22,7 +22,7 @@ export function ReviewRequestTable({
   initialRequests,
 }: ReviewRequestTableProps) {
   const router = useRouter();
-  const [requests] = React.useState<ReviewRequest[]>(initialRequests);
+  const requests = initialRequests;
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [ratingFilter, setRatingFilter] = React.useState<string>("ALL");

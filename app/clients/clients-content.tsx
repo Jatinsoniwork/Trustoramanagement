@@ -32,38 +32,58 @@ export function ClientsContent({ initialClients }: ClientsContentProps) {
 
   const handleSaveClient = async (data: ClientInput) => {
     if (clientToEdit) {
+      const res = await fetch(`/api/clients/${clientToEdit.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update client");
+      }
+      const updated = await res.json();
       setClients((prev) =>
         prev.map((c) =>
-          c.id === clientToEdit.id
-            ? { ...c, ...data, updatedAt: new Date() }
-            : c
+          c.id === clientToEdit.id ? { ...c, ...updated.data } : c
         )
       );
     } else {
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to create client");
+      }
+      const created = await res.json();
       const newClient: Client = {
-        id: `client-${Date.now()}`,
-        name: data.name,
-        contactName: data.contactName,
-        email: data.email,
-        phone: data.phone,
-        notes: data.notes,
-        status: data.status,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        ...created.data,
         _count: { businesses: 0 },
       };
       setClients((prev) => [newClient, ...prev]);
     }
   };
 
-  const handleConfirmDeactivate = () => {
+  const handleConfirmDeactivate = async () => {
     if (!clientToDeactivate) return;
-    setClients((prev) =>
-      prev.map((c) =>
-        c.id === clientToDeactivate.id ? { ...c, status: "INACTIVE" } : c
-      )
-    );
-    setClientToDeactivate(null);
+    try {
+      const res = await fetch(`/api/clients/${clientToDeactivate.id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === clientToDeactivate.id ? { ...c, status: "INACTIVE" } : c
+          )
+        );
+      }
+    } catch (e) {
+      console.error("Failed to deactivate client", e);
+    } finally {
+      setClientToDeactivate(null);
+    }
   };
 
   return (

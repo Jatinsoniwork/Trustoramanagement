@@ -25,7 +25,7 @@ export function ClientTable({
   onEditClient,
   onDeactivateClient,
 }: ClientTableProps) {
-  const [clients] = React.useState<Client[]>(initialClients);
+  const clients = initialClients;
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [sortBy, setSortBy] = React.useState<"newest" | "name">("newest");

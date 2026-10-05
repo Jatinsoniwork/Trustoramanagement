@@ -46,16 +46,18 @@ export function DashboardContent({
   const approvedReviews = reviews.filter((r) => r.status === "APPROVED" || r.status === "COMPLETED").length;
 
   const handleCreateClient = async (data: ClientInput) => {
+    const res = await fetch("/api/clients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to create client");
+    }
+    const created = await res.json();
     const newClient: Client = {
-      id: `client-${Date.now()}`,
-      name: data.name,
-      contactName: data.contactName,
-      email: data.email,
-      phone: data.phone,
-      notes: data.notes,
-      status: data.status,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      ...created.data,
       _count: { businesses: 0 },
     };
     setClients((prev) => [newClient, ...prev]);
@@ -67,32 +69,24 @@ export function DashboardContent({
       entityId: newClient.id,
       metadata: { name: newClient.name },
       createdAt: new Date(),
-      actor: {
-        id: "operator-1",
-        name: "Primary Operator",
-        email: "operator@reviewflow.local",
-        role: "ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
     };
     setActivity((prev) => [newLog, ...prev]);
   };
 
   const handleCreateBusiness = async (data: BusinessInput) => {
+    const res = await fetch("/api/businesses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to create business");
+    }
+    const created = await res.json();
     const parentClient = clients.find((c) => c.id === data.clientId);
     const newBiz: Business = {
-      id: `biz-${Date.now()}`,
-      clientId: data.clientId,
-      name: data.name,
-      googleMapsUrl: data.googleMapsUrl,
-      placeIdentifier: data.placeIdentifier,
-      category: data.category,
-      location: data.location,
-      notes: data.notes,
-      status: data.status,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      ...created.data,
       client: parentClient,
       _count: { reviewRequests: 0 },
     };
@@ -105,14 +99,6 @@ export function DashboardContent({
       entityId: newBiz.id,
       metadata: { name: newBiz.name, category: newBiz.category },
       createdAt: new Date(),
-      actor: {
-        id: "operator-1",
-        name: "Primary Operator",
-        email: "operator@reviewflow.local",
-        role: "ADMIN",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
     };
     setActivity((prev) => [newLog, ...prev]);
   };
